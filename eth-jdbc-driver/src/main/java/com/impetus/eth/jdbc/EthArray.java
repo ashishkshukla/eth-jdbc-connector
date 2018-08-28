@@ -52,8 +52,10 @@ public class EthArray implements BlkchnArray {
     @Override
     public Object getArray() throws SQLException {
         if (baseType == java.sql.Types.JAVA_OBJECT || baseType == java.sql.Types.VARCHAR) {
-            String[] arrayObj = new String[arrayData.size()];
-            for (int i = 0; i < arrayData.size(); i++) {
+            int size = 0;
+            if(arrayData != null) size = arrayData.size();
+            String[] arrayObj = new String[size];
+            for (int i = 0; i < size; i++) {
                 arrayObj[i] = arrayData.get(i).toString();
             }
             return arrayObj;

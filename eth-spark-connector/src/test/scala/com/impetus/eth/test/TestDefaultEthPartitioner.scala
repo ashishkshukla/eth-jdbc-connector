@@ -1,18 +1,18 @@
 /******************************************************************************* 
- * * Copyright 2018 Impetus Infotech.
- * *
- * * Licensed under the Apache License, Version 2.0 (the "License");
- * * you may not use this file except in compliance with the License.
- * * You may obtain a copy of the License at
- * *
- * * http://www.apache.org/licenses/LICENSE-2.0
- * *
- * * Unless required by applicable law or agreed to in writing, software
- * * distributed under the License is distributed on an "AS IS" BASIS,
- * * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * * See the License for the specific language governing permissions and
- * * limitations under the License.
- ******************************************************************************/
+* * Copyright 2018 Impetus Infotech.
+* *
+* * Licensed under the Apache License, Version 2.0 (the "License");
+* * you may not use this file except in compliance with the License.
+* * You may obtain a copy of the License at
+* *
+* * http://www.apache.org/licenses/LICENSE-2.0
+* *
+* * Unless required by applicable law or agreed to in writing, software
+* * distributed under the License is distributed on an "AS IS" BASIS,
+* * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* * See the License for the specific language governing permissions and
+* * limitations under the License.
+******************************************************************************/
 package com.impetus.eth.test
 
 import java.math.BigInteger
@@ -21,18 +21,19 @@ import com.impetus.blkch.spark.connector.rdd.ReadConf
 import com.impetus.blkch.spark.connector.BlkchnConnector
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.eth.EthConnectorConf
-import org.scalatest.{ BeforeAndAfter, FlatSpec }
+import org.scalatest.{ BeforeAndAfter, BeforeAndAfterAll, FlatSpec }
 import com.impetus.eth.spark.connector.rdd.partitioner.DefaultEthPartitioner
-import com.impetus.test.catagory.{ UnitTest }
+import com.impetus.test.catagory.UnitTest
 
 @UnitTest
-class TestDefaultEthPartitioner extends FlatSpec with BeforeAndAfter with SharedSparkSession {
+class TestDefaultEthPartitioner extends FlatSpec with BeforeAndAfterAll with SharedSparkSession {
 
   var ethConnectorConf: EthConnectorConf = null
   var blkchnConnector: BlkchnConnector = null
   var defaultPartition: DefaultEthPartitioner = null
 
-  before {
+  override def beforeAll() {
+    super.beforeAll()
     Class.forName("com.impetus.eth.jdbc.EthDriver")
     ethConnectorConf = EthConnectorConf(spark.sparkContext.getConf, Map("url" -> "jdbc:blkchn:ethereum://ropsten.infura.io/1234"))
     blkchnConnector = new BlkchnConnector(ethConnectorConf)
