@@ -37,7 +37,7 @@ class TestEthSparkJDBC extends FlatSpec with BeforeAndAfterAll with SharedSparkS
       .option("dbtable", "block").load()
   }
 
-  "Eth Spark JDBC Data Frame" should "have rows" in {
+  "Eth Spark JDBC Data Frame Block" should "have rows" in {
     val newDF = df.where("blocknumber > 2256446 and blocknumber < 2256451").select("blocknumber", "hash", "transactions")
     newDF.show()
     assert(newDF.collect().length > 0)
@@ -88,6 +88,11 @@ class TestEthSparkJDBC extends FlatSpec with BeforeAndAfterAll with SharedSparkS
     assertResult("transactions")(schema(18).name)
     assertResult("uncles")(schema(19).name)
     assertResult("sealfields")(schema(20).name)
+
+    assertResult("array")(schema(18).dataType.typeName)
+    assertResult("decimal(38,0)")(schema(0).dataType.typeName)
+    assertResult("string")(schema(1).dataType.typeName)
+
     newDF.unpersist()
   }
 
