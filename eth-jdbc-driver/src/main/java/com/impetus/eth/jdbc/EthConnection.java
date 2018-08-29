@@ -240,7 +240,7 @@ public class EthConnection implements BlkchnConnection {
 
     @Override
     public boolean getAutoCommit() throws SQLException {
-        throw new UnsupportedOperationException();
+        return true;
     }
 
     @Override
@@ -265,7 +265,7 @@ public class EthConnection implements BlkchnConnection {
 
     @Override
     public DatabaseMetaData getMetaData() throws SQLException {
-        throw new UnsupportedOperationException();
+        return new EthDatabaseMetadata();
     }
 
     @Override
@@ -331,7 +331,6 @@ public class EthConnection implements BlkchnConnection {
 
     @Override
     public PreparedStatement prepareStatement(String sql) throws SQLException {
-        System.out.println("Sql : " + sql);
         return prepareStatement(sql, java.sql.ResultSet.FETCH_FORWARD, java.sql.ResultSet.CONCUR_READ_ONLY);
     }
 

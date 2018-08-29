@@ -17,14 +17,17 @@ package com.impetus.eth.jdbc;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import com.impetus.blkch.BlkchnException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.web3j.protocol.core.methods.response.Transaction;
 
 import com.impetus.blkch.jdbc.AbstractResultSet;
 import com.impetus.blkch.sql.DataFrame;
@@ -43,7 +46,6 @@ public class EthResultSet extends AbstractResultSet {
 
     protected static final int AFTER_LAST_ROW = -1;
 
-    /** Has this ResultSet been closed? */
     protected boolean isClosed = false;
 
     protected int currentRowCursor;
@@ -66,6 +68,10 @@ public class EthResultSet extends AbstractResultSet {
 
     protected Map<String, Integer> colTypeMap;
 
+    protected Object lastReadColValue;
+
+    protected Map<Integer, String> indexToColumnMap;
+
     private static final String EXCEPTION_MSG = "Result set doesn't contain index %d";
 
     public EthResultSet(DataFrame dataframe, int resultSetType, int rSetConcurrency, String tableName) {
@@ -76,12 +82,14 @@ public class EthResultSet extends AbstractResultSet {
         this.rSetConcurrency = rSetConcurrency;
         this.tableName = tableName;
         this.aliasMapping = dataframe.getAliasMapping();
+        this. indexToColumnMap =
+                columnNamesMap.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
         currentRowCursor = BEFORE_FIRST_ROW;
         totalRowCount = rowData.size();
     }
 
     public EthResultSet(DataFrame dataframe, int resultSetType, int rSetConcurrency, String tableName,
-        Map<String, Integer> colTypeMap) {
+            Map<String, Integer> colTypeMap) {
         LOGGER.info("Instantiating new Result Set ");
         this.rowData = dataframe.getData();
         this.columnNamesMap = dataframe.getColumnNamesMap();
@@ -90,6 +98,8 @@ public class EthResultSet extends AbstractResultSet {
         this.tableName = tableName;
         this.aliasMapping = dataframe.getAliasMapping();
         this.colTypeMap = colTypeMap;
+        this. indexToColumnMap =
+                columnNamesMap.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
         currentRowCursor = BEFORE_FIRST_ROW;
         totalRowCount = rowData.size();
     }
@@ -103,8 +113,7 @@ public class EthResultSet extends AbstractResultSet {
         this.resultSetType = resultSetType;
         this.rSetConcurrency = rSetConcurrency;
         this.colTypeMap = new HashMap<>();
-        //Receipt 2000 for SQL JDBC_OBJECT type
-        colTypeMap.put("Receipt",2000);
+        colTypeMap.put("Receipt", 2000);
         this.tableName = "TransactionReceipt";
         currentRowCursor = BEFORE_FIRST_ROW;
         totalRowCount = rowData.size();
@@ -203,7 +212,7 @@ public class EthResultSet extends AbstractResultSet {
     @Override
     public void afterLast() throws SQLException {
         checkClosed();
-        LOGGER.info("Moving the cursor to thee end of ResultSet Object");
+        LOGGER.info("Moving the cursor to the end of ResultSet Object");
         checkRSForward();
         currentRowCursor = AFTER_LAST_ROW;
     }
@@ -267,6 +276,7 @@ public class EthResultSet extends AbstractResultSet {
     @Override
     public String getString(String columnLabel) throws SQLException {
         int idx = getColumnIndex(columnLabel);
+        lastReadColValue = currentRow[idx];
         if (currentRow[idx] instanceof BigInteger) {
             return ((BigInteger) currentRow[idx]).toString();
         }
@@ -278,6 +288,7 @@ public class EthResultSet extends AbstractResultSet {
         if (columnIndex < 1 || columnIndex > currentRow.length) {
             throw new SQLException(String.format(EXCEPTION_MSG, columnIndex));
         }
+        lastReadColValue = currentRow[columnIndex - 1];
         if (currentRow[columnIndex - 1] instanceof BigInteger) {
             return ((BigInteger) currentRow[columnIndex - 1]).toString();
         }
@@ -286,6 +297,7 @@ public class EthResultSet extends AbstractResultSet {
 
     @Override
     public Object getObject(String columnLabel) throws SQLException {
+        lastReadColValue = currentRow[getColumnIndex(columnLabel)];
         return currentRow[getColumnIndex(columnLabel)];
     }
 
@@ -294,6 +306,7 @@ public class EthResultSet extends AbstractResultSet {
         if (columnIndex < 1 || columnIndex > currentRow.length) {
             throw new SQLException(String.format(EXCEPTION_MSG, columnIndex));
         }
+        lastReadColValue = currentRow[columnIndex - 1];
         return currentRow[columnIndex - 1];
     }
 
@@ -302,11 +315,13 @@ public class EthResultSet extends AbstractResultSet {
         if (columnIndex < 1 || columnIndex > currentRow.length) {
             throw new SQLException(String.format(EXCEPTION_MSG, columnIndex));
         }
+        lastReadColValue = currentRow[columnIndex - 1];
         return (int) currentRow[columnIndex - 1];
     }
 
     @Override
     public int getInt(String columnLabel) throws SQLException {
+        lastReadColValue = currentRow[getColumnIndex(columnLabel)];
         return (int) currentRow[getColumnIndex(columnLabel)];
     }
 
@@ -315,11 +330,13 @@ public class EthResultSet extends AbstractResultSet {
         if (columnIndex < 1 || columnIndex > currentRow.length) {
             throw new SQLException(String.format(EXCEPTION_MSG, columnIndex));
         }
+        lastReadColValue = currentRow[columnIndex - 1];
         return (long) currentRow[columnIndex - 1];
     }
 
     @Override
     public long getLong(String columnLabel) throws SQLException {
+        lastReadColValue = currentRow[getColumnIndex(columnLabel)];
         return (long) currentRow[getColumnIndex(columnLabel)];
     }
 
@@ -328,16 +345,18 @@ public class EthResultSet extends AbstractResultSet {
         if (columnIndex < 1 || columnIndex > currentRow.length) {
             throw new SQLException(String.format(EXCEPTION_MSG, columnIndex));
         }
+        lastReadColValue = currentRow[columnIndex - 1];
         if (currentRow[columnIndex - 1] instanceof BigInteger) {
-            return new BigDecimal((BigInteger)currentRow[columnIndex - 1]);
+            return new BigDecimal((BigInteger) currentRow[columnIndex - 1]);
         }
         return (BigDecimal) currentRow[columnIndex - 1];
     }
 
     @Override
     public BigDecimal getBigDecimal(String columnLabel) throws SQLException {
+        lastReadColValue = currentRow[getColumnIndex(columnLabel)];
         if (currentRow[getColumnIndex(columnLabel)] instanceof BigInteger) {
-            return new BigDecimal((BigInteger)currentRow[getColumnIndex(columnLabel)]);
+            return new BigDecimal((BigInteger) currentRow[getColumnIndex(columnLabel)]);
         }
         return (BigDecimal) currentRow[getColumnIndex(columnLabel)];
     }
@@ -347,11 +366,13 @@ public class EthResultSet extends AbstractResultSet {
         if (columnIndex < 1 || columnIndex > currentRow.length) {
             throw new SQLException(String.format(EXCEPTION_MSG, columnIndex));
         }
+        lastReadColValue = currentRow[columnIndex - 1];
         return (boolean) currentRow[columnIndex - 1];
     }
 
     @Override
     public boolean getBoolean(String columnLabel) throws SQLException {
+        lastReadColValue = currentRow[getColumnIndex(columnLabel)];
         return (boolean) currentRow[getColumnIndex(columnLabel)];
     }
 
@@ -360,11 +381,13 @@ public class EthResultSet extends AbstractResultSet {
         if (columnIndex < 1 || columnIndex > currentRow.length) {
             throw new SQLException(String.format(EXCEPTION_MSG, columnIndex));
         }
+        lastReadColValue = currentRow[columnIndex - 1];
         return (byte) currentRow[columnIndex - 1];
     }
 
     @Override
     public byte getByte(String columnLabel) throws SQLException {
+        lastReadColValue = currentRow[getColumnIndex(columnLabel)];
         return (byte) currentRow[getColumnIndex(columnLabel)];
     }
 
@@ -373,11 +396,13 @@ public class EthResultSet extends AbstractResultSet {
         if (columnIndex < 1 || columnIndex > currentRow.length) {
             throw new SQLException(String.format(EXCEPTION_MSG, columnIndex));
         }
+        lastReadColValue = currentRow[columnIndex - 1];
         return (byte[]) currentRow[columnIndex - 1];
     }
 
     @Override
     public byte[] getBytes(String columnLabel) throws SQLException {
+        lastReadColValue = currentRow[getColumnIndex(columnLabel)];
         return (byte[]) currentRow[getColumnIndex(columnLabel)];
     }
 
@@ -386,11 +411,14 @@ public class EthResultSet extends AbstractResultSet {
         if (columnIndex < 1 || columnIndex > currentRow.length) {
             throw new SQLException(String.format(EXCEPTION_MSG, columnIndex));
         }
+        lastReadColValue = currentRow[columnIndex - 1];
         return (double) currentRow[columnIndex - 1];
     }
 
     @Override
     public double getDouble(String columnLabel) throws SQLException {
+        checkClosed();
+        lastReadColValue = currentRow[getColumnIndex(columnLabel)];
         return (double) currentRow[getColumnIndex(columnLabel)];
     }
 
@@ -399,12 +427,30 @@ public class EthResultSet extends AbstractResultSet {
         if (columnIndex < 1 || columnIndex > currentRow.length) {
             throw new SQLException(String.format(EXCEPTION_MSG, columnIndex));
         }
+        lastReadColValue = currentRow[columnIndex - 1];
         return (short) currentRow[columnIndex - 1];
     }
 
     @Override
     public short getShort(String columnLabel) throws SQLException {
+        lastReadColValue = currentRow[getColumnIndex(columnLabel)];
         return (short) currentRow[getColumnIndex(columnLabel)];
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Array getArray(int columnIndex) throws SQLException {
+        lastReadColValue = currentRow[columnIndex - 1];
+        int columnType=colTypeMap.get(indexToColumnMap.get(columnIndex - 1));
+        return new EthArray((List<Object>) lastReadColValue,columnType);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Array getArray(String columnLabel) throws SQLException {
+        lastReadColValue = currentRow[getColumnIndex(columnLabel)];
+        int columnType=colTypeMap.get(getColumnName(columnLabel));
+        return new EthArray((List<Object>) lastReadColValue,columnType);
     }
 
     @Override
@@ -420,12 +466,21 @@ public class EthResultSet extends AbstractResultSet {
     @Override
     public ResultSetMetaData getMetaData() throws SQLException {
         checkClosed();
-        return new EthResultSetMetaData(tableName, columnNamesMap, aliasMapping, colTypeMap);
+        return new EthResultSetMetaData(tableName, columnNamesMap, aliasMapping, colTypeMap,indexToColumnMap);
     }
 
     @Override
     public int findColumn(String columnLabel) throws SQLException {
         return columnNamesMap.get(columnLabel);
+    }
+
+    @Override
+    public boolean wasNull() throws SQLException {
+        if (getLastColValue() == null) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     protected void checkRSForward() throws SQLException {
@@ -448,6 +503,22 @@ public class EthResultSet extends AbstractResultSet {
             }
             return columnNamesMap.get(columnLabel);
         }
+    }
+    
+    protected String getColumnName(String columnLabel) {
+        if (!aliasMapping.isEmpty() && aliasMapping.containsKey(columnLabel)) {
+            return indexToColumnMap.get(columnNamesMap.get(aliasMapping.get(columnLabel)));
+        } else {
+            if (columnNamesMap.get(columnLabel) == null) {
+                LOGGER.error("Column: " + columnLabel + " is not a part of query");
+                throw new RuntimeException("Column: " + columnLabel + " is not a part of query");
+            }
+            return indexToColumnMap.get(columnNamesMap.get(columnLabel));
+        }
+    }
+
+    protected Object getLastColValue() {
+        return this.lastReadColValue;
     }
 
 }

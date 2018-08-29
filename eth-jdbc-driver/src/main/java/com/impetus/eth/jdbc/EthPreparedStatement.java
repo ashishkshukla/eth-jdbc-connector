@@ -18,6 +18,12 @@ package com.impetus.eth.jdbc;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +39,8 @@ import com.impetus.blkch.util.placeholder.InsertPlaceholderHandler;
 import com.impetus.blkch.util.placeholder.PlaceholderHandler;
 import com.impetus.blkch.util.placeholder.QueryPlaceholderHandler;
 import com.impetus.eth.parser.EthQueryExecutor;
+
+import jnr.ffi.Struct.int16_t;
 
 public class EthPreparedStatement extends AbstractPreparedStatement {
 
@@ -57,6 +65,10 @@ public class EthPreparedStatement extends AbstractPreparedStatement {
     protected PlaceholderHandler placeholderHandler;
 
     protected int rowCount;
+    
+    protected int fetchSize;
+    
+    protected List<Object[]> batchList= new ArrayList<Object[]>();
 
     public EthPreparedStatement(EthConnection connection, String sql, int rSetType, int rSetConcurrency) {
         super();
@@ -78,8 +90,45 @@ public class EthPreparedStatement extends AbstractPreparedStatement {
         placeholderHandler.setPlaceholderIndex();
         if (!placeholderHandler.isIndexListEmpty())
             this.placeholderValues = new Object[placeholderHandler.getIndexListCount()];
+        //System.out.println("Sql is "+sql);
     }
 
+    @Override
+    public void addBatch() throws SQLException {
+        if(logicalPlan.getType() == SQLType.QUERY)
+            throw new BlkchnException("BlkchnStatement Batch can only contains insert or call statements !!");
+        batchList.add(placeholderValues);
+        /*It will clear the previous values*/
+        //this.placeholderValues=new Object[placeholderHandler.getIndexListCount()];
+        this.placeholderValues=placeholderValues.clone();
+    }
+
+    public List<Object[]> getBatchedArgs() {
+        return this.batchList == null ? null : Collections.unmodifiableList(this.batchList);
+    }
+    
+    @Override
+    public int[] executeBatch() throws SQLException {
+        LOGGER.info("Entering into executeBatch Block");
+        if (isClosed)
+            throw new BlkchnException("No operations allowed after statement closed.");
+        if (this.batchList == null || this.batchList.size() == 0) {
+            return new int[0];
+        }
+        int[] updateCounts= new int[batchList.size()];
+        Arrays.fill(updateCounts, EXECUTE_FAILED);
+        for(int i=0;i<batchList.size();i++){
+            this.placeholderValues=batchList.get(i);
+            try{
+                updateCounts[i]=executeUpdate();
+            }catch (BlkchnException e){
+                updateCounts[i]=EXECUTE_FAILED;
+                LOGGER.warn("PreparedStatement with values " + batchList.get(i).toString() + " gave exception "+e.getMessage());
+            }
+        }
+        batchList.clear();
+        return updateCounts;
+    }
     @Override
     public ResultSet executeQuery() throws SQLException {
         LOGGER.info("Entering into executeQuery Block");
@@ -93,9 +142,12 @@ public class EthPreparedStatement extends AbstractPreparedStatement {
             case QUERY:
                 Table table = logicalPlan.getQuery().getChildType(FromItem.class, 0).getChildType(Table.class, 0);
                 String tableName = table.getChildType(IdentifierNode.class, 0).getValue();
-                DataFrame dataframe = new EthQueryExecutor(logicalPlan, connection.getWeb3jClient(),
-                        connection.getInfo()).executeQuery();
-                queryResultSet = new EthResultSet(dataframe, rSetType, rSetConcurrency, tableName);
+                EthQueryExecutor executor= new EthQueryExecutor(logicalPlan, connection.getWeb3jClient(),
+                        connection.getInfo());
+                DataFrame dataframe =executor.executeQuery();
+                Map<String, Integer> dataTypeColumnMap = executor.computeDataTypeColumnMap();
+
+                queryResultSet = new EthResultSet(dataframe, rSetType, rSetConcurrency, tableName,dataTypeColumnMap);
                 LOGGER.info("Exiting from executeQuery Block");
                 return queryResultSet;
             default:
@@ -217,6 +269,11 @@ public class EthPreparedStatement extends AbstractPreparedStatement {
         if (!placeholderHandler.isIndexListEmpty())
             this.placeholderValues = new Object[placeholderHandler.getIndexListCount()];
     }
+    
+    @Override
+    public void setFetchSize(int rows) throws SQLException {
+       this.fetchSize=rows;
+    }
 
     @Override
     public boolean isClosed() throws SQLException {
@@ -239,8 +296,9 @@ public class EthPreparedStatement extends AbstractPreparedStatement {
             this.queryResultSet = null;
             this.rSetType = 0;
             this.rSetConcurrency = 0;
+            batchList.clear();
         } catch (Exception e) {
-            LOGGER.error("ERROR : Array index out of bound");
+            LOGGER.error("Error while closing statement");
             throw new BlkchnException("Error while closing statement", e);
         }
     }
